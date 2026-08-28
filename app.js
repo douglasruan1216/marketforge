@@ -361,7 +361,10 @@ $("#confirmSignup").addEventListener("click", async () => {
   const password = $("#signupPassword").value;
   if (!email || !password) { $("#authError").textContent = "Enter an email and password."; return; }
   if (password.length < 6) { $("#authError").textContent = "Password must be at least 6 characters."; return; }
-  const { data, error } = await sb.auth.signUp({ email, password });
+  const { data, error } = await sb.auth.signUp({
+    email, password,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname },
+  });
   if (error) { $("#authError").textContent = error.message || "Sign up failed."; return; }
   if (!data.session) {
     $("#authError").textContent = "";
