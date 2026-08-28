@@ -396,6 +396,15 @@ $("#logoutBtn").addEventListener("click", async () => {
   await sb.auth.signOut();
 });
 
+$("#googleSignInBtn").addEventListener("click", async () => {
+  $("#authError").textContent = "";
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  });
+  if (error) $("#authError").textContent = error.message || "Google sign-in failed.";
+});
+
 // ---------- Auth state ----------
 
 sb.auth.onAuthStateChange((_event, s) => {

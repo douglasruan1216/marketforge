@@ -495,6 +495,19 @@ input:focus {
   justify-content: center;
 }
 
+.google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+.google-btn:hover { background: var(--bg-soft); opacity: 1; }
+
 .auth-google-note {
   text-align: center;
   font-size: 12px;
