@@ -80,27 +80,12 @@ create policy mf_activity_select on mf_activity for select using (auth.role() = 
 -- that's the ONLY path to mutating data.)
 
 -- ============================================================
--- Auto-create a profile (10,000 starting cash) whenever someone signs up
+-- NOTE: profiles are created lazily, inside mf_get_state() below —
+-- only for someone who actually opens MarketForge — NOT via an
+-- AFTER INSERT trigger on auth.users. This project's auth.users table
+-- is shared with other apps (e.g. GDRandomLevel), so a global signup
+-- trigger would silently enroll people who never touched MarketForge.
 -- ============================================================
-
-create or replace function mf_handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into mf_profiles (user_id, display_name, cash)
-  values (new.id, split_part(new.email, '@', 1), 10000)
-  on conflict (user_id) do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists mf_on_auth_user_created on auth.users;
-create trigger mf_on_auth_user_created
-  after insert on auth.users
-  for each row execute function mf_handle_new_user();
 
 -- ============================================================
 -- Helper: trim price history to the last 240 points per stock
@@ -298,6 +283,7 @@ set search_path = public
 as $$
 declare
   v_uid uuid := auth.uid();
+  v_email text := auth.jwt() ->> 'email';
   v_profile record;
   v_stocks json;
   v_portfolio json;
@@ -308,8 +294,13 @@ declare
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
 
+  -- Lazily create a profile the first time this specific person opens
+  -- MarketForge — never as a side effect of signing up elsewhere.
+  insert into mf_profiles (user_id, display_name, cash)
+  values (v_uid, split_part(coalesce(v_email, 'trader'), '@', 1), 10000)
+  on conflict (user_id) do nothing;
+
   select * into v_profile from mf_profiles where user_id = v_uid;
-  if v_profile is null then raise exception 'not_authenticated'; end if;
 
   select coalesce(json_agg(row_to_json(t)), '[]'::json) into v_stocks
   from (
