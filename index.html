@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketForge</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📈 <span>MarketForge</span></div>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Cash</div>
+        <div class="stat-value" id="cashValue">$0.00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Net Worth</div>
+        <div class="stat-value" id="netWorthValue">$0.00</div>
+        <div class="stat-sub" id="netWorthChange">+0.00%</div>
+      </div>
+      <button class="btn btn-primary" id="createStockBtn">+ Launch a Stock</button>
+      <div class="account-menu">
+        <span class="account-name" id="accountName"></span>
+        <button class="btn btn-ghost" id="logoutBtn">Log out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout" id="appLayout">
+    <section class="market">
+      <h2>Market</h2>
+      <div class="stock-grid" id="stockGrid"></div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Portfolio</h2>
+        <div id="portfolioList" class="portfolio-list">
+          <div class="empty-note">You don't own anything yet.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>🏆 Leaderboard</h2>
+        <div class="leaderboard-heading">Richest Traders</div>
+        <div id="richestList" class="leaderboard-list">
+          <div class="empty-note">No one has traded yet.</div>
+        </div>
+        <div class="leaderboard-heading">Priciest Stocks</div>
+        <div id="priciestList" class="leaderboard-list">
+          <div class="empty-note">No stocks listed yet.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Activity</h2>
+        <div id="activityFeed" class="activity-feed"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Auth screen -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-card">
+      <div class="brand auth-brand">📈 <span>MarketForge</span></div>
+      <p class="auth-sub">A fake stock market you and your friends can trade on.</p>
+      <div class="tabs">
+        <button class="tab active" data-authtab="login">Log In</button>
+        <button class="tab" data-authtab="signup">Sign Up</button>
+      </div>
+      <div class="tab-panel" id="loginPanel">
+        <label>Email</label>
+        <input type="email" id="loginEmail" autocomplete="email">
+        <label>Password</label>
+        <input type="password" id="loginPassword" autocomplete="current-password">
+        <button class="btn btn-primary" id="confirmLogin">Log In</button>
+      </div>
+      <div class="tab-panel hidden" id="signupPanel">
+        <label>Email</label>
+        <input type="email" id="signupEmail" autocomplete="email">
+        <label>Password</label>
+        <input type="password" id="signupPassword" autocomplete="new-password">
+        <button class="btn btn-primary" id="confirmSignup">Sign Up</button>
+      </div>
+      <div class="modal-error" id="authError"></div>
+    </div>
+  </div>
+
+  <!-- Trade Modal -->
+  <div class="modal-overlay" id="tradeOverlay">
+    <div class="modal">
+      <button class="modal-close" data-close>&times;</button>
+      <h3 id="tradeTitle">Trade</h3>
+      <div class="trade-price" id="tradePrice"></div>
+      <div class="trade-tax-note" id="tradeTaxNote"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="buy">Buy</button>
+        <button class="tab" data-tab="sell">Sell</button>
+      </div>
+      <div class="tab-panel" id="buyPanel">
+        <label>Amount to spend ($)</label>
+        <input type="number" id="buyAmount" min="0" step="0.01" placeholder="e.g. 1000">
+        <div class="estimate" id="buyEstimate"></div>
+        <button class="btn btn-buy" id="confirmBuy">Buy</button>
+      </div>
+      <div class="tab-panel hidden" id="sellPanel">
+        <label>Shares to sell</label>
+        <input type="number" id="sellShares" min="0" step="0.0001" placeholder="e.g. 10">
+        <div class="estimate" id="sellEstimate"></div>
+        <button class="btn btn-sell" id="confirmSell">Sell</button>
+      </div>
+      <div class="modal-error" id="tradeError"></div>
+    </div>
+  </div>
+
+  <!-- Create Stock Modal -->
+  <div class="modal-overlay" id="createOverlay">
+    <div class="modal">
+      <button class="modal-close" data-close>&times;</button>
+      <h3>Launch a Stock</h3>
+      <p class="modal-hint">Every stock IPOs at $1.00/share. Listing fee: <span id="listingFeeText">$500</span>. You'll get <span id="founderBonusText">50</span> founder shares free.</p>
+      <label>Company name</label>
+      <input type="text" id="newName" maxlength="40" placeholder="e.g. Acme Widgets">
+      <label>Ticker symbol (1-5 letters)</label>
+      <input type="text" id="newSymbol" maxlength="5" placeholder="e.g. ACME" style="text-transform:uppercase">
+      <label>Sector</label>
+      <input type="text" id="newSector" maxlength="20" placeholder="e.g. Tech">
+      <button class="btn btn-primary" id="confirmCreate">Launch IPO — $1.00/share</button>
+      <div class="modal-error" id="createError"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
