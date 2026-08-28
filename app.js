@@ -64,7 +64,10 @@ function startPolling() {
 
 // ---------- Rendering ----------
 
-function drawSparkline(canvas, values, positive) {
+function drawCandles(canvas, values) {
+  // Each price-history point is a real trade, and an AMM swap moves price
+  // monotonically in one direction — so open/close from consecutive points
+  // gives an accurate candle with no synthetic high/low needed.
   const ctx = canvas.getContext("2d");
   const w = canvas.width = canvas.clientWidth * devicePixelRatio;
   const h = canvas.height = canvas.clientHeight * devicePixelRatio;
@@ -73,16 +76,25 @@ function drawSparkline(canvas, values, positive) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  ctx.beginPath();
-  values.forEach((v, i) => {
-    const x = (i / (values.length - 1)) * w;
-    const y = h - ((v - min) / range) * h * 0.85 - h * 0.075;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = positive ? "#16a34a" : "#dc2626";
-  ctx.lineWidth = 1.5 * devicePixelRatio;
-  ctx.stroke();
+  const yFor = (v) => h - ((v - min) / range) * h * 0.85 - h * 0.075;
+
+  const n = values.length - 1;
+  const slotW = w / n;
+  const bodyW = Math.max(1 * devicePixelRatio, slotW * 0.6);
+  const minBodyH = 1.5 * devicePixelRatio;
+
+  for (let i = 0; i < n; i++) {
+    const open = values[i];
+    const close = values[i + 1];
+    const up = close >= open;
+    const x = i * slotW + slotW / 2;
+    const yOpen = yFor(open);
+    const yClose = yFor(close);
+    const top = Math.min(yOpen, yClose);
+    const bodyH = Math.max(minBodyH, Math.abs(yClose - yOpen));
+    ctx.fillStyle = up ? "#16a34a" : "#dc2626";
+    ctx.fillRect(x - bodyW / 2, top, bodyW, bodyH);
+  }
 }
 
 function render() {
@@ -134,7 +146,7 @@ function renderStockGrid() {
     `;
     card.addEventListener("click", () => openTradeModal(s.symbol));
     grid.appendChild(card);
-    drawSparkline(card.querySelector(".sparkline"), hist, pos);
+    drawCandles(card.querySelector(".sparkline"), hist);
   });
 }
 
