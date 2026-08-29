@@ -106,6 +106,12 @@ function buildCandles(values, targetCount = 24) {
   return candles;
 }
 
+// Colors + layout match how real charting libraries (TradingView, Lightweight
+// Charts) render candles: #26a69a / #ef5350 up/down, a light price-axis grid
+// on the right, and a dashed line marking the last traded price.
+const CANDLE_UP = "#26a69a";
+const CANDLE_DOWN = "#ef5350";
+
 function drawCandles(canvas, values) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width = canvas.clientWidth * devicePixelRatio;
@@ -113,21 +119,41 @@ function drawCandles(canvas, values) {
   ctx.clearRect(0, 0, w, h);
   if (!values || values.length < 2) return;
 
-  const candles = buildCandles(values);
+  const candles = buildCandles(values, 40);
   if (!candles.length) return;
 
   const min = Math.min(...candles.map(c => c.low));
   const max = Math.max(...candles.map(c => c.high));
   const range = max - min || 1;
-  const yFor = (v) => h - ((v - min) / range) * h * 0.85 - h * 0.075;
+  const labelW = Math.min(52 * devicePixelRatio, w * 0.22);
+  const chartW = w - labelW;
+  const padTop = h * 0.08, padBottom = h * 0.08;
+  const yFor = (v) => h - padBottom - ((v - min) / range) * (h - padTop - padBottom);
+
+  // Horizontal gridlines + a right-hand price axis, like a real chart.
+  const gridLines = 4;
+  ctx.strokeStyle = "rgba(107,114,128,0.15)";
+  ctx.lineWidth = Math.max(1, devicePixelRatio);
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = `${Math.round(10 * devicePixelRatio)}px -apple-system, sans-serif`;
+  ctx.textBaseline = "middle";
+  for (let i = 0; i <= gridLines; i++) {
+    const v = min + (range * i) / gridLines;
+    const y = yFor(v);
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(chartW, y);
+    ctx.stroke();
+    if (labelW > 4) ctx.fillText("$" + v.toFixed(2), chartW + 6 * devicePixelRatio, y);
+  }
 
   // Real candlestick charts leave a visible gap between candles (roughly a
   // 30% padding) rather than butting them up against each other — cap the
   // slot too, so a handful of candles don't stretch into giant blocks.
   const n = candles.length;
-  const maxSlotW = 14 * devicePixelRatio;
-  const slotW = Math.min(w / n, maxSlotW);
-  const xOffset = (w - slotW * n) / 2;
+  const maxSlotW = 22 * devicePixelRatio;
+  const slotW = Math.min(chartW / n, maxSlotW);
+  const xOffset = (chartW - slotW * n) / 2;
   const bodyW = Math.max(1 * devicePixelRatio, slotW * 0.7);
   const wickW = Math.max(1, Math.round(devicePixelRatio));
   const minBodyH = 1.5 * devicePixelRatio;
@@ -135,7 +161,7 @@ function drawCandles(canvas, values) {
   candles.forEach((c, i) => {
     const up = c.close >= c.open;
     const x = xOffset + i * slotW + slotW / 2;
-    const color = up ? "#16a34a" : "#dc2626";
+    const color = up ? CANDLE_UP : CANDLE_DOWN;
 
     const yHigh = yFor(c.high);
     const yLow = yFor(c.low);
@@ -148,6 +174,18 @@ function drawCandles(canvas, values) {
     const bodyH = Math.max(minBodyH, Math.abs(yClose - yOpen));
     ctx.fillRect(x - bodyW / 2, top, bodyW, bodyH);
   });
+
+  // Dashed last-price line spanning the chart, same idea as Robinhood/TradingView.
+  const yLast = yFor(candles[candles.length - 1].close);
+  ctx.save();
+  ctx.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]);
+  ctx.strokeStyle = "#9ca3af";
+  ctx.lineWidth = Math.max(1, devicePixelRatio);
+  ctx.beginPath();
+  ctx.moveTo(0, yLast);
+  ctx.lineTo(chartW, yLast);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function render() {
@@ -195,11 +233,9 @@ function renderStockGrid() {
       </div>
       <div class="stock-price">${fmtMoney(s.price)}</div>
       <div class="stock-change ${pos ? "pos" : "neg"}">${pos ? "+" : ""}${changePct.toFixed(2)}%</div>
-      <canvas class="sparkline"></canvas>
     `;
     card.addEventListener("click", () => openTradeModal(s.symbol));
     grid.appendChild(card);
-    drawCandles(card.querySelector(".sparkline"), hist);
   });
 }
 
@@ -309,11 +345,35 @@ function openTradeModal(symbol) {
   updateTradeModalPrice();
 }
 
+// Everything in the stock-detail modal that should stay live while it's
+// open — chart, price, change%, and stats — refreshed both on open and on
+// every poll tick (see render()) so it behaves like a real ticker page.
 function updateTradeModalPrice() {
   const s = latestState.stocksBySymbol[activeSymbol];
   if (!s) return;
+  const hist = s.history || [];
+  const base = hist.length ? hist[0] : s.price;
+  const changePct = base ? ((s.price - base) / base * 100) : 0;
+  const pos = changePct >= 0;
+
   $("#tradeTitle").textContent = `${s.name} (${activeSymbol})`;
-  $("#tradePrice").textContent = `Current price: ${fmtMoney(s.price)}`;
+  $("#tradeSector").textContent = s.sector + (s.founder ? " · ★ your stock" : "");
+  $("#tradePriceValue").textContent = fmtMoney(s.price);
+  const changeEl = $("#tradeChangeValue");
+  changeEl.textContent = `${pos ? "+" : ""}${changePct.toFixed(2)}%`;
+  changeEl.className = "stock-change " + (pos ? "pos" : "neg");
+
+  drawCandles($("#tradeChart"), hist);
+
+  const high = hist.length ? Math.max(...hist) : s.price;
+  const low = hist.length ? Math.min(...hist) : s.price;
+  const holding = (latestState.portfolio || []).find((p) => p.symbol === activeSymbol);
+  $("#tradeStats").innerHTML = `
+    <div class="detail-stat"><div class="detail-stat-label">Session High</div><div class="detail-stat-value">${fmtMoney(high)}</div></div>
+    <div class="detail-stat"><div class="detail-stat-label">Session Low</div><div class="detail-stat-value">${fmtMoney(low)}</div></div>
+    <div class="detail-stat"><div class="detail-stat-label">Your Position</div><div class="detail-stat-value">${holding ? fmtShares(holding.shares) + " sh" : "None"}</div></div>
+  `;
+
   const taxPct = latestState.trade_tax_pct ?? 0.25;
   $("#tradeTaxNote").textContent = `A ${taxPct}% trading tax applies to every buy/sell.`;
 }

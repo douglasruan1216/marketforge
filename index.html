@@ -103,12 +103,22 @@
     </div>
   </div>
 
-  <!-- Trade Modal -->
+  <!-- Trade Modal (stock detail: chart + stats + buy/sell) -->
   <div class="modal-overlay" id="tradeOverlay">
-    <div class="modal">
+    <div class="modal modal-detail">
       <button class="modal-close" data-close>&times;</button>
-      <h3 id="tradeTitle">Trade</h3>
-      <div class="trade-price" id="tradePrice"></div>
+      <div class="detail-header">
+        <div>
+          <h3 id="tradeTitle">Trade</h3>
+          <div class="stock-sector" id="tradeSector"></div>
+        </div>
+        <div class="detail-price-block">
+          <div class="detail-price" id="tradePriceValue"></div>
+          <div class="stock-change" id="tradeChangeValue"></div>
+        </div>
+      </div>
+      <canvas class="detail-chart" id="tradeChart"></canvas>
+      <div class="detail-stats" id="tradeStats"></div>
       <div class="trade-tax-note" id="tradeTaxNote"></div>
       <div class="tabs">
         <button class="tab active" data-tab="buy">Buy</button>

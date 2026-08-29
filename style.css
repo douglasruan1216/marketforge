@@ -185,13 +185,6 @@ h2 {
 .stock-change.pos { color: var(--green); }
 .stock-change.neg { color: var(--red); }
 
-.sparkline {
-  width: 100%;
-  height: 40px;
-  margin-top: 8px;
-  display: block;
-}
-
 .panel {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -321,8 +314,59 @@ h2 {
   padding: 24px;
   width: 340px;
   max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
   box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+}
+
+.modal-detail { width: 440px; }
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-right: 22px;
+}
+.detail-header h3 { margin: 0 0 2px; }
+
+.detail-price-block { text-align: right; }
+.detail-price {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-chart {
+  width: 100%;
+  height: 220px;
+  display: block;
+  margin: 14px 0;
+}
+
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.detail-stat {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.detail-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.detail-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
 }
 
 .modal-close {
