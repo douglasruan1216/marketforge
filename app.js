@@ -79,7 +79,12 @@ function drawCandles(canvas, values) {
   const yFor = (v) => h - ((v - min) / range) * h * 0.85 - h * 0.075;
 
   const n = values.length - 1;
-  const slotW = w / n;
+  // Cap how wide a slot can get — with only 1-2 trades so far, n is tiny and
+  // w/n would stretch a single candle into a giant solid block filling the
+  // whole card. Cap it to a sane width and center the group instead.
+  const maxSlotW = 14 * devicePixelRatio;
+  const slotW = Math.min(w / n, maxSlotW);
+  const xOffset = (w - slotW * n) / 2;
   const bodyW = Math.max(1 * devicePixelRatio, slotW * 0.6);
   const minBodyH = 1.5 * devicePixelRatio;
 
@@ -87,7 +92,7 @@ function drawCandles(canvas, values) {
     const open = values[i];
     const close = values[i + 1];
     const up = close >= open;
-    const x = i * slotW + slotW / 2;
+    const x = xOffset + i * slotW + slotW / 2;
     const yOpen = yFor(open);
     const yClose = yFor(close);
     const top = Math.min(yOpen, yClose);
@@ -305,6 +310,50 @@ $("#confirmSell").addEventListener("click", async () => {
   await fetchState();
   toast(`Sold ${activeSymbol}`);
   $("#tradeOverlay").classList.remove("open");
+});
+
+// ---------- Buy All modal ----------
+
+$("#buyAllBtn").addEventListener("click", () => {
+  const count = latestState?.stocks?.length || 0;
+  if (!count) { toast("No stocks listed yet — launch one first!"); return; }
+  $("#buyAllOverlay").classList.add("open");
+  $("#buyAllError").textContent = "";
+  $("#buyAllAmount").value = "";
+  $("#buyAllEstimate").textContent = "";
+  $("#buyAllCount").textContent = count;
+  const taxPct = latestState.trade_tax_pct ?? 0.25;
+  $("#buyAllTaxNote").textContent = `A ${taxPct}% trading tax applies to each of the ${count} buys.`;
+});
+
+$("#buyAllAmount").addEventListener("input", () => {
+  const total = parseFloat($("#buyAllAmount").value);
+  const count = latestState?.stocks?.length || 0;
+  if (!total || total <= 0 || !count) { $("#buyAllEstimate").textContent = ""; return; }
+  $("#buyAllEstimate").textContent = `≈ ${fmtMoney(total / count)} into each of ${count} stocks`;
+});
+
+$("#confirmBuyAll").addEventListener("click", async () => {
+  const total = parseFloat($("#buyAllAmount").value);
+  const symbols = (latestState?.stocks || []).map((s) => s.symbol);
+  if (!total || total <= 0) { $("#buyAllError").textContent = "Enter a valid amount."; return; }
+  if (!symbols.length) { $("#buyAllError").textContent = "No stocks to buy."; return; }
+  if (total > latestState.cash + 1e-6) { $("#buyAllError").textContent = "You don't have that much cash."; return; }
+
+  $("#confirmBuyAll").disabled = true;
+  const perStock = total / symbols.length;
+  let bought = 0, failed = 0;
+  for (const symbol of symbols) {
+    const { error } = await sb.rpc('mf_buy', { p_symbol: symbol, p_cash_amount: perStock });
+    if (error) failed++; else bought++;
+  }
+  $("#confirmBuyAll").disabled = false;
+
+  await fetchState();
+  toast(failed
+    ? `Bought into ${bought} stock${bought === 1 ? "" : "s"}, ${failed} failed`
+    : `Bought into all ${bought} stock${bought === 1 ? "" : "s"}!`);
+  $("#buyAllOverlay").classList.remove("open");
 });
 
 // ---------- Create stock modal ----------

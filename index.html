@@ -19,6 +19,7 @@
         <div class="stat-value" id="netWorthValue">$0.00</div>
         <div class="stat-sub" id="netWorthChange">+0.00%</div>
       </div>
+      <button class="btn btn-ghost" id="buyAllBtn">🛒 Buy All Stocks</button>
       <button class="btn btn-primary" id="createStockBtn">+ Launch a Stock</button>
       <div class="account-menu">
         <span class="account-name" id="accountName"></span>
@@ -121,6 +122,21 @@
         <button class="btn btn-sell" id="confirmSell">Sell</button>
       </div>
       <div class="modal-error" id="tradeError"></div>
+    </div>
+  </div>
+
+  <!-- Buy All Modal -->
+  <div class="modal-overlay" id="buyAllOverlay">
+    <div class="modal">
+      <button class="modal-close" data-close>&times;</button>
+      <h3>Buy All Stocks</h3>
+      <p class="modal-hint">Splits your money evenly across all <span id="buyAllCount">0</span> listed stocks in one go.</p>
+      <label>Total amount to invest ($)</label>
+      <input type="number" id="buyAllAmount" min="0" step="0.01" placeholder="e.g. 2000">
+      <div class="estimate" id="buyAllEstimate"></div>
+      <div class="trade-tax-note" id="buyAllTaxNote"></div>
+      <button class="btn btn-buy" id="confirmBuyAll">Buy All</button>
+      <div class="modal-error" id="buyAllError"></div>
     </div>
   </div>
 
