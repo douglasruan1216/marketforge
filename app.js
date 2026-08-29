@@ -409,6 +409,13 @@ $("#maxBuyBtn").addEventListener("click", () => {
   $("#buyAmount").dispatchEvent(new Event("input"));
 });
 
+$("#maxSellBtn").addEventListener("click", () => {
+  if (!latestState) return;
+  const holding = (latestState.portfolio || []).find((p) => p.symbol === activeSymbol);
+  $("#sellShares").value = holding && holding.shares > 0 ? holding.shares : "";
+  $("#sellShares").dispatchEvent(new Event("input"));
+});
+
 $("#confirmBuy").addEventListener("click", async () => {
   const amount = parseFloat($("#buyAmount").value);
   if (!amount || amount <= 0) { $("#tradeError").textContent = "Enter a valid amount."; return; }

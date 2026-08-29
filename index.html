@@ -134,7 +134,10 @@
         <button class="btn btn-buy" id="confirmBuy">Buy</button>
       </div>
       <div class="tab-panel hidden" id="sellPanel">
-        <label>Shares to sell</label>
+        <div class="label-row">
+          <label>Shares to sell</label>
+          <button class="btn-link" id="maxSellBtn">Max</button>
+        </div>
         <input type="number" id="sellShares" min="0" step="0.0001" placeholder="e.g. 10">
         <div class="estimate" id="sellEstimate"></div>
         <button class="btn btn-sell" id="confirmSell">Sell</button>
