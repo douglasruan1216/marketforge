@@ -13,6 +13,15 @@ let pollTimer = null;
 
 const $ = (sel) => document.querySelector(sel);
 
+// Right after Google (or email confirmation) redirects back, the page loads
+// with #access_token=... (or ?code=...) in the URL. Supabase then has to
+// parse that, exchange it, and hit our RPC before anything shows — that can
+// take several seconds. Without this, the plain login form flashes back up
+// during that window and looks broken/frozen even though it's working.
+const oauthInProgress = location.hash.includes("access_token") || location.search.includes("code=");
+let oauthTimeout = null;
+let oauthResolved = false;
+
 function fmtMoney(n) {
   return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -29,11 +38,15 @@ function toast(msg) {
 
 // ---------- Auth screen plumbing ----------
 
-function showAuthScreen() {
+function showAuthScreen(loading = false) {
   $("#authOverlay").classList.add("open");
   $("#appLayout").classList.add("hidden");
+  $("#authLoading").classList.toggle("hidden", !loading);
+  $("#authFormContent").classList.toggle("hidden", loading);
 }
 function hideAuthScreen() {
+  oauthResolved = true;
+  clearTimeout(oauthTimeout);
   $("#authOverlay").classList.remove("open");
   $("#appLayout").classList.remove("hidden");
 }
@@ -64,42 +77,77 @@ function startPolling() {
 
 // ---------- Rendering ----------
 
+// Group the raw trade-by-trade price tape into real OHLC candles instead of
+// treating every single trade as its own candle. values[0] is the price
+// baseline going into the window; each value after that is one trade.
+// A candle's open is the tape's price walking in, its close is where the
+// tape stood when the candle's group of trades finished, and its high/low
+// are the actual extremes the price touched while getting there — so a
+// candle can get a real wick whenever the price went one way and came back
+// (e.g. someone bought in then someone else sold) instead of always being a
+// flat-topped block.
+function buildCandles(values, targetCount = 24) {
+  const n = values.length - 1;
+  if (n <= 0) return [];
+  const groupSize = Math.max(1, Math.ceil(n / targetCount));
+  const candles = [];
+  for (let i = 0; i < n; i += groupSize) {
+    const open = values[i];
+    const end = Math.min(i + groupSize, n);
+    const chunk = values.slice(i + 1, end + 1);
+    const close = chunk[chunk.length - 1];
+    candles.push({
+      open,
+      close,
+      high: Math.max(open, ...chunk),
+      low: Math.min(open, ...chunk),
+    });
+  }
+  return candles;
+}
+
 function drawCandles(canvas, values) {
-  // Each price-history point is a real trade, and an AMM swap moves price
-  // monotonically in one direction — so open/close from consecutive points
-  // gives an accurate candle with no synthetic high/low needed.
   const ctx = canvas.getContext("2d");
   const w = canvas.width = canvas.clientWidth * devicePixelRatio;
   const h = canvas.height = canvas.clientHeight * devicePixelRatio;
   ctx.clearRect(0, 0, w, h);
   if (!values || values.length < 2) return;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+
+  const candles = buildCandles(values);
+  if (!candles.length) return;
+
+  const min = Math.min(...candles.map(c => c.low));
+  const max = Math.max(...candles.map(c => c.high));
   const range = max - min || 1;
   const yFor = (v) => h - ((v - min) / range) * h * 0.85 - h * 0.075;
 
-  const n = values.length - 1;
-  // Cap how wide a slot can get — with only 1-2 trades so far, n is tiny and
-  // w/n would stretch a single candle into a giant solid block filling the
-  // whole card. Cap it to a sane width and center the group instead.
+  // Real candlestick charts leave a visible gap between candles (roughly a
+  // 30% padding) rather than butting them up against each other — cap the
+  // slot too, so a handful of candles don't stretch into giant blocks.
+  const n = candles.length;
   const maxSlotW = 14 * devicePixelRatio;
   const slotW = Math.min(w / n, maxSlotW);
   const xOffset = (w - slotW * n) / 2;
-  const bodyW = Math.max(1 * devicePixelRatio, slotW * 0.6);
+  const bodyW = Math.max(1 * devicePixelRatio, slotW * 0.7);
+  const wickW = Math.max(1, Math.round(devicePixelRatio));
   const minBodyH = 1.5 * devicePixelRatio;
 
-  for (let i = 0; i < n; i++) {
-    const open = values[i];
-    const close = values[i + 1];
-    const up = close >= open;
+  candles.forEach((c, i) => {
+    const up = c.close >= c.open;
     const x = xOffset + i * slotW + slotW / 2;
-    const yOpen = yFor(open);
-    const yClose = yFor(close);
+    const color = up ? "#16a34a" : "#dc2626";
+
+    const yHigh = yFor(c.high);
+    const yLow = yFor(c.low);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - wickW / 2, yHigh, wickW, Math.max(wickW, yLow - yHigh));
+
+    const yOpen = yFor(c.open);
+    const yClose = yFor(c.close);
     const top = Math.min(yOpen, yClose);
     const bodyH = Math.max(minBodyH, Math.abs(yClose - yOpen));
-    ctx.fillStyle = up ? "#16a34a" : "#dc2626";
     ctx.fillRect(x - bodyW / 2, top, bodyW, bodyH);
-  }
+  });
 }
 
 function render() {
@@ -292,6 +340,15 @@ $("#sellShares").addEventListener("input", () => {
   $("#sellEstimate").textContent = `≈ ${fmtMoney(shares * s.price)} (before price impact)`;
 });
 
+$("#maxBuyBtn").addEventListener("click", () => {
+  if (!latestState) return;
+  // Floor to the cent so rounding never pushes this a hair past the cash
+  // the backend actually has on file (which would bounce as "Not enough cash").
+  const max = Math.floor(latestState.cash * 100) / 100;
+  $("#buyAmount").value = max > 0 ? max : "";
+  $("#buyAmount").dispatchEvent(new Event("input"));
+});
+
 $("#confirmBuy").addEventListener("click", async () => {
   const amount = parseFloat($("#buyAmount").value);
   if (!amount || amount <= 0) { $("#tradeError").textContent = "Enter a valid amount."; return; }
@@ -310,50 +367,6 @@ $("#confirmSell").addEventListener("click", async () => {
   await fetchState();
   toast(`Sold ${activeSymbol}`);
   $("#tradeOverlay").classList.remove("open");
-});
-
-// ---------- Buy All modal ----------
-
-$("#buyAllBtn").addEventListener("click", () => {
-  const count = latestState?.stocks?.length || 0;
-  if (!count) { toast("No stocks listed yet — launch one first!"); return; }
-  $("#buyAllOverlay").classList.add("open");
-  $("#buyAllError").textContent = "";
-  $("#buyAllAmount").value = "";
-  $("#buyAllEstimate").textContent = "";
-  $("#buyAllCount").textContent = count;
-  const taxPct = latestState.trade_tax_pct ?? 0.25;
-  $("#buyAllTaxNote").textContent = `A ${taxPct}% trading tax applies to each of the ${count} buys.`;
-});
-
-$("#buyAllAmount").addEventListener("input", () => {
-  const total = parseFloat($("#buyAllAmount").value);
-  const count = latestState?.stocks?.length || 0;
-  if (!total || total <= 0 || !count) { $("#buyAllEstimate").textContent = ""; return; }
-  $("#buyAllEstimate").textContent = `≈ ${fmtMoney(total / count)} into each of ${count} stocks`;
-});
-
-$("#confirmBuyAll").addEventListener("click", async () => {
-  const total = parseFloat($("#buyAllAmount").value);
-  const symbols = (latestState?.stocks || []).map((s) => s.symbol);
-  if (!total || total <= 0) { $("#buyAllError").textContent = "Enter a valid amount."; return; }
-  if (!symbols.length) { $("#buyAllError").textContent = "No stocks to buy."; return; }
-  if (total > latestState.cash + 1e-6) { $("#buyAllError").textContent = "You don't have that much cash."; return; }
-
-  $("#confirmBuyAll").disabled = true;
-  const perStock = total / symbols.length;
-  let bought = 0, failed = 0;
-  for (const symbol of symbols) {
-    const { error } = await sb.rpc('mf_buy', { p_symbol: symbol, p_cash_amount: perStock });
-    if (error) failed++; else bought++;
-  }
-  $("#confirmBuyAll").disabled = false;
-
-  await fetchState();
-  toast(failed
-    ? `Bought into ${bought} stock${bought === 1 ? "" : "s"}, ${failed} failed`
-    : `Bought into all ${bought} stock${bought === 1 ? "" : "s"}!`);
-  $("#buyAllOverlay").classList.remove("open");
 });
 
 // ---------- Create stock modal ----------
@@ -461,6 +474,12 @@ sb.auth.onAuthStateChange((_event, s) => {
   setTimeout(() => {
     if (session) {
       startPolling();
+    } else if (oauthInProgress && !oauthResolved) {
+      // First event after an OAuth/email redirect can fire with no session
+      // yet, right before the real one lands — keep showing the spinner
+      // instead of flashing the login form, but don't wait forever
+      // (the timeout below still catches a genuine failure).
+      showAuthScreen(true);
     } else {
       clearInterval(pollTimer);
       latestState = null;
@@ -469,4 +488,13 @@ sb.auth.onAuthStateChange((_event, s) => {
   }, 0);
 });
 
-showAuthScreen(); // instant UI; the auth listener above takes over once the session resolves
+if (oauthInProgress) {
+  showAuthScreen(true);
+  oauthTimeout = setTimeout(() => {
+    oauthResolved = true;
+    showAuthScreen();
+    $("#authError").textContent = "Sign-in is taking longer than expected — please try again.";
+  }, 20000);
+} else {
+  showAuthScreen(); // instant UI; the auth listener above takes over once the session resolves
+}
